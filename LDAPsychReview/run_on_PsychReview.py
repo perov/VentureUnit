@@ -28,7 +28,8 @@ print "vocab_size: " + str(vocab_size)
 
 import venture.engine as MyRIPL
 
-MyRIPL.clear() # To delete previous sessions data.
+# To delete previous sessions data.
+MyRIPL.clear()
 
 # Load the model
 MyRIPL.assume("parameteralpha", "1.0")
