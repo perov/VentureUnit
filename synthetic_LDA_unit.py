@@ -1,11 +1,9 @@
+
 from venture import engine as MyRIPL
 
-#from venture import client
-#MyRIPL = client.RemoteRIPL('127.0.0.1', 8082)
+from venture_unit import *
 
-from benchmarking import *
-
-class LDA(Benchmarker):
+class LDA(VentureUnit):
     def makeAssumes(self):
         self.assume("topics", str(self.parameters['topics']))
         self.assume("vocab", str(self.parameters['vocab']))
@@ -27,11 +25,10 @@ class LDA(Benchmarker):
                 self.observe("(get-word %d %d)" % (doc, pos), 0)
 
 parameters = {'topics' : 4, 'vocab' : 10, 'documents' : 8, 'words_per_document' : 12}
-lda = LDA(MyRIPL, parameters)
+model = LDA(MyRIPL, parameters)
 
-history = lda.runConditionedFromPrior(50)
-#history = lda.runFromJoint(50)
-#history = lda.sampleFromJoint(50)
-#history = lda.computeJointKL(200, 200, verbose=True)[2]
+history = model.runConditionedFromPrior(50)
+#history = model.runFromJoint(50)
+#history = model.sampleFromJoint(50)
+#history = model.computeJointKL(200, 200, verbose=True)[2]
 history.plot(fmt='png')
-

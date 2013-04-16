@@ -50,8 +50,8 @@ def parseValue(value):
     # this probably should not happen
     return None
 
-# Simple benchmarking tool for Venture models.
-class Benchmarker:
+# VentureUnit is an experimental harness for developing, debugging and profiling Venture programs.
+class VentureUnit:
     RIPL = None
     parameters = {}
     assumes = []
@@ -141,8 +141,12 @@ class Benchmarker:
     # Provides independent samples from the joint distribution (observes turned into predicts).
     # A random subset of the predicts are tracked along with the assumed variables.
     def sampleFromJoint(self, samples, track=5, verbose=False):
-        assumedValues = {symbol : [] for (symbol, expression) in self.assumes}
-        predictedValues = {index : [] for index in range(len(self.observes))}
+        assumedValues = {}
+        for (symbol, expression) in self.assumes:
+          assumedValues[symbol] = []
+        predictedValues = {}
+        for index in range(len(self.observes)):
+          predictedValues[index] = []
         
         logscores = []
         
@@ -192,8 +196,12 @@ class Benchmarker:
             
             (assumeToDirective, predictToDirective) = self.loadModelWithPredicts(track)
             
-            assumedValues = {symbol : [] for symbol in assumeToDirective}
-            predictedValues = {index : [] for index in predictToDirective}
+            assumedValues = {}
+            for symbol in assumeToDirective:
+              assumedValues[symbol] = []
+            predictedValues = {}
+            for index in predictToDirective:
+              predictedValues[index] = []
             
             sweepTimes = []
             sweepIters = []
@@ -272,8 +280,10 @@ class Benchmarker:
             sweepIters = []
             logscores = []
             
-            assumedValues = {symbol : [] for symbol in assumeToDirective}
-            
+            assumedValues = {}
+            for symbol in assumeToDirective:
+              assumedValues[symbol] = []
+              
             for sweep in range(sweeps):
                 if verbose:
                     print "Running sweep " + str(sweep)
