@@ -7,7 +7,7 @@ unique_run_id = int(time.time())
 
 num_topics = 50
 predict_iter = 10000
-duration_of_one_cycle = 2 # In seconds.
+duration_of_one_cycle = 60 * 10 # In seconds.
 num_top_words = 20
 
 # Choose the data set here.
@@ -125,7 +125,10 @@ while True:
     top_words = nltk_object.keys()[:num_top_words]
     f.write('topic ' + str(t) + ':')
     for w in top_words:
-      f.write(' ' + vocab[w] + '(' + str(nltk_object.freq(w)) + ')')
+      w2 = w.replace("a[", "")
+      w2 = w2.replace("]", "")
+      w2 = int(w2)
+      f.write(' ' + vocab[w2] + '(' + str(nltk_object.freq(w)) + ')')
     f.write('\n')
   f.close()
   
