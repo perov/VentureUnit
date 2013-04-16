@@ -120,7 +120,7 @@ while True:
   f = open("./results_" + str(unique_run_id) + "/topics-out." + str(unique_run_id) + "." + str(unique_attempt_id) + ".txt", 'w')
   f.write(str(number_of_made_sweeps) + '\n')
   for t in range(num_topics):
-    samples = pickle.load(open("./results" + str(unique_run_id) + "/results." + str(unique_run_id) + "." + str(unique_attempt_id) + "." + str(t) + ".txt", 'r'))
+    samples = pickle.load(open("./results_" + str(unique_run_id) + "/results." + str(unique_run_id) + "." + str(unique_attempt_id) + "." + str(t) + ".txt", 'r'))
     nltk_object = nltk.FreqDist(samples)
     top_words = nltk_object.keys()[:num_top_words]
     f.write('topic ' + str(t) + ':')
