@@ -458,7 +458,7 @@ def computeKL(reference, approx, numbins=20):
     
     kl = 0.0
     
-    for (index, (p, q)) in enumerate(zip(refPDF, apxPDF)):
+    for (p, q) in zip(refPDF, apxPDF):
         kl += math.log(p/q) * p * (mx-mn) / numbins
     
     return kl
