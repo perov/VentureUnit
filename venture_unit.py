@@ -91,6 +91,7 @@ class VentureUnit:
     
     # Loads the assumes and changes the observes to predicts.
     # Also picks a subset of the predicts to track (by default all are tracked).
+    # Prunes non-scalar values, unless prune=False.
     # Does not reset engine RNG.
     def loadModelWithPredicts(self, track=-1, prune=True):
         self.RIPL.clear()
@@ -111,7 +112,7 @@ class VentureUnit:
         if track >= 0:
             track = min(track, len(predictToDirective))
             # FIXME: need predictable behavior from RNG
-            random.seed(1653315835)
+            random.seed(parameters['venture_random_seed'])
             predictToDirective = dict(random.sample(predictToDirective.items(), track))
         
         return (assumeToDirective, predictToDirective)
