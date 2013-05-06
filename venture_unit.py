@@ -336,14 +336,7 @@ class VentureUnit:
         
         return history
 
-import matplotlib
-#matplotlib.use('pdf')
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-#from matplotlib.backends.backend_pdf import PdfPages
-import os
-
-# records data for each sweep
+# Records data for each sweep.
 class History:
     def __init__(self, label='empty_history', parameters={}):
         self.label = label
@@ -384,6 +377,14 @@ class Series:
         self.values = values
         self.hist = hist
 
+import matplotlib
+#matplotlib.use('pdf')
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+#from matplotlib.backends.backend_pdf import PdfPages
+import os
+
+# Displays parameters in top-left corner of the graph.
 def showParameters(parameters):
     items = sorted(parameters.items())
     
@@ -393,6 +394,7 @@ def showParameters(parameters):
     
     plt.text(0, 1, text, transform=plt.axes().transAxes, va='top', size='small', linespacing=1.0)
 
+# Plots a set of series.
 def plotSeries(name, subtitle, seriesList, parameters, fmt, directory):
     fig = plt.figure()
     plt.clf()
@@ -420,6 +422,7 @@ def plotSeries(name, subtitle, seriesList, parameters, fmt, directory):
     #plt.tight_layout()
     fig.savefig(directory + name.replace(' ', '_') + '_series.' + fmt, format=fmt)
 
+# Plots histograms for a set of series.
 def plotHistogram(name, subtitle, seriesList, parameters, fmt, directory):
     fig = plt.figure()
     plt.clf()
