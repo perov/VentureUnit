@@ -336,7 +336,11 @@ class VentureUnit:
         
         return history
 
-# Records data for each sweep.
+from numpy import mean
+
+# Records data for each sweep. Typically, all scalar assumes are recorded.
+# Certain running modes convert observes to predicts. In those cases, a random subset of the observes (now predicts) are tracked.
+# Some extra data is also recorded, such as the logscore, sweep_time, and sweep_iters.
 class History:
     def __init__(self, label='empty_history', parameters={}):
         self.label = label
@@ -347,6 +351,12 @@ class History:
         if name not in self.nameToSeries:
             self.nameToSeries[name] = []
         self.nameToSeries[name].append(Series(label, values, hist))
+    
+    def averageValue(self, seriesName):
+        if seriesName not in self.nameToSeries:
+            return None
+        
+        return [(series.label, mean(series.values)) for series in self.nameToSeries[seriesName]]
     
     # default directory for plots, created from parameters
     def defaultDirectory(self):
@@ -466,4 +476,67 @@ def computeKL(reference, approx, numbins=20):
         kl += math.log(p/q) * p * (mx-mn) / numbins
     
     return kl
+
+import itertools
+from collections import namedtuple
+
+def cartesianProduct(keyToValues):
+    makeIterable = lambda obj : obj if hasattr(obj, '__iter__') else [obj]
+    
+    items = [(key, makeIterable(value)) for (key, value) in keyToValues.items()]
+    
+    Key = namedtuple('Key', [key for (key, _) in items])
+    
+    product = list(Key._make(t) for t in itertools.product(*[values for (_, values) in items]))
+    
+    return product
+
+# Produces histories for a set of parameters.
+# Here the parameters can contain lists. For example, {'a':[0, 1], 'b':[2, 3]}.
+# Then histories will be computed for the parameter settings ('a', 'b') = (0, 1), (0, 2), (1, 2), (1, 3)
+# Runner should take a given parameter setting and produce a history.
+# For example, runner = lambda params : Model(RIPL, params).runConditionedFromPrior(sweeps, runs)
+# Returned is a dictionary mapping each parameter setting (as a namedtuple) to the history.
+def produceHistories(parameters, runner):
+    return {params : runner(params._asdict()) for params in cartesianProduct(parameters)}
+
+def addToDict(dictionary, key, value):
+    dictionary[key] = value
+    return dictionary
+
+# Produces plots for a a given variable over a set of runs.
+def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None, verbose=False):
+    if directory is None:
+        directory = seriesName + '_asymptotics/'
+    
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+    
+    Key = namedtuple('Key', parameters.keys())
+    paramsToValue = {params : mean([value for (_, value) in history.averageValue(seriesName)]) for (params, history) in histories.items()}
+    
+    for (key, values) in parameters.items():
+        if not hasattr(values, '__iter__'):
+            continue
+        
+        others = parameters.copy()
+        del others[key]
+        
+        for params in cartesianProduct(others):
+            fig = plt.figure()
+            plt.clf()
+            plt.title(seriesName + ' versus ' + key)
+            plt.xlabel(key)
+            plt.ylabel(seriesName)
+            showParameters(params._asdict())
+            
+            plt.scatter(values, [paramsToValue[Key(**addToDict(params._asdict(), key, v))] for v in values])
+            
+            filename = key
+            for (param, value) in params._asdict().items():
+                filename += '_' + param + '=' + str(value)
+            
+            #plt.tight_layout()
+            fig.savefig(directory + filename.replace(' ', '_') + '_asymptotics.' + fmt, format=fmt)
+
 
