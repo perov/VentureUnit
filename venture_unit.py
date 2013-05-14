@@ -413,12 +413,8 @@ def plotSeries(name, subtitle, seriesList, parameters, fmt, directory):
     plt.ylabel(name)
     showParameters(parameters)
     
-    plots = []
-
-    for series in seriesList:
-        plot = plt.plot(series.values)[0]
-        plots.append(plot)
-        
+    plots = [plt.plot(series.values)[0] for series in seriesList]
+    
     plt.legend(plots, [series.label for series in seriesList])
 
     ymin = min([min(series.values) for series in seriesList])
@@ -479,17 +475,17 @@ def computeKL(reference, approx, numbins=20):
 
 import itertools
 from collections import namedtuple
+from matplotlib import cm
+
+def makeIterable(obj):
+    return obj if hasattr(obj, '__iter__') else [obj]
 
 def cartesianProduct(keyToValues):
-    makeIterable = lambda obj : obj if hasattr(obj, '__iter__') else [obj]
-    
     items = [(key, makeIterable(value)) for (key, value) in keyToValues.items()]
     
     Key = namedtuple('Key', [key for (key, _) in items])
     
-    product = list(Key._make(t) for t in itertools.product(*[values for (_, values) in items]))
-    
-    return product
+    return [Key._make(t) for t in itertools.product(*[values for (_, values) in items])]
 
 # Produces histories for a set of parameters.
 # Here the parameters can contain lists. For example, {'a':[0, 1], 'b':[2, 3]}.
@@ -505,7 +501,8 @@ def addToDict(dictionary, key, value):
     return dictionary
 
 # Produces plots for a a given variable over a set of runs.
-def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None, verbose=False):
+# If aggregate=True, multiple plots that differ in only one parameter are overlayed.
+def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None, verbose=False, aggregate=False):
     if directory is None:
         directory = seriesName + '_asymptotics/'
     
@@ -522,21 +519,50 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
         others = parameters.copy()
         del others[key]
         
-        for params in cartesianProduct(others):
-            fig = plt.figure()
-            plt.clf()
-            plt.title(seriesName + ' versus ' + key)
-            plt.xlabel(key)
-            plt.ylabel(seriesName)
-            showParameters(params._asdict())
-            
-            plt.scatter(values, [paramsToValue[Key(**addToDict(params._asdict(), key, v))] for v in values])
-            
-            filename = key
-            for (param, value) in params._asdict().items():
-                filename += '_' + param + '=' + str(value)
-            
-            #plt.tight_layout()
-            fig.savefig(directory + filename.replace(' ', '_') + '_asymptotics.' + fmt, format=fmt)
-
+        if aggregate:
+            for (other, otherValues) in others.items():
+                otherValues = makeIterable(otherValues)
+                
+                rest = others.copy()
+                del rest[other]
+                
+                for params in cartesianProduct(rest):
+                    fig = plt.figure()
+                    plt.clf()
+                    plt.title(seriesName + ' versus ' + key)
+                    plt.xlabel(key)
+                    plt.ylabel(seriesName)
+                    showParameters(params._asdict())
+                    
+                    colors = cm.rainbow(np.linspace(0, 1, len(otherValues)))
+                    
+                    for (otherValue, c) in zip(otherValues, colors):
+                        p = addToDict(params._asdict(), other, otherValue)
+                        plt.scatter(values, [paramsToValue[Key(**addToDict(p, key, value))] for value in values], label=other+'='+str(otherValue), color=c)
+                    
+                    plt.legend()
+                    
+                    filename = key
+                    for (param, value) in params._asdict().items():
+                        filename += '_' + param + '=' + str(value)
+                    
+                    #plt.tight_layout()
+                    fig.savefig(directory + filename.replace(' ', '_') + '_asymptotics.' + fmt, format=fmt)
+        else:
+            for params in cartesianProduct(others):
+                fig = plt.figure()
+                plt.clf()
+                plt.title(seriesName + ' versus ' + key)
+                plt.xlabel(key)
+                plt.ylabel(seriesName)
+                showParameters(params._asdict())
+                
+                plt.scatter(values, [paramsToValue[Key(**addToDict(params._asdict(), key, v))] for v in values])
+                
+                filename = key
+                for (param, value) in params._asdict().items():
+                    filename += '_' + param + '=' + str(value)
+                
+                #plt.tight_layout()
+                fig.savefig(directory + filename.replace(' ', '_') + '_asymptotics.' + fmt, format=fmt)
 

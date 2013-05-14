@@ -36,4 +36,4 @@ class LDA(VentureUnit):
 parameters = {'topics' : [4, 8], 'vocab' : 10, 'documents' : [8, 12], 'words_per_document' : [4*x for x in range(2, 10)]}
 runner = lambda params : LDA(MyRIPL, params).runConditionedFromPrior(sweeps=20, runs=1)
 histories = produceHistories(parameters, runner)
-plotAsymptotics(parameters, histories, 'sweep_time')
+plotAsymptotics(parameters, histories, 'sweep_time', aggregate=True)
