@@ -494,7 +494,11 @@ def cartesianProduct(keyToValues):
 # For example, runner = lambda params : Model(RIPL, params).runConditionedFromPrior(sweeps, runs)
 # Returned is a dictionary mapping each parameter setting (as a namedtuple) to the history.
 def produceHistories(parameters, runner):
-    return {params : runner(params._asdict()) for params in cartesianProduct(parameters)}
+    returning_dictionary = {}
+    for params in cartesianProduct(parameters):
+        returning_dictionary[params] = runner(params._asdict())
+    return returning_dictionary
+    # return {params : runner(params._asdict()) for params in cartesianProduct(parameters)}
 
 def addToDict(dictionary, key, value):
     dictionary[key] = value
