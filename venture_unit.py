@@ -1,58 +1,18 @@
 import time
 import random
 import pdb
-from venture.lisp_parser import parse
 import numpy
 
-# whether to record a value returned from the RIPL
+# whether to record a value returned from the ripl
 def record(value):
-    if type(value) == bool:
-        return True
-    elif type(value) == int:
-        return True
-    elif type(value) == float:
-        return True
-    elif type(value) == str:
-        sep = '['
-        if sep in value:
-            typeName = value.partition('[')[0]
-            if typeName == 'a':
-                return True
-            else: # can't convert this type to a number
-                return False
-        else: # probably a LAMBDA or other procedure
-            return False
-    
-    # this probably should not happen
-    return False
+    return value['type'] in {'boolean', 'real', 'number', 'atom', 'count', 'probability', 'smoothed_count'}
 
-# Converts venture types to numbers.
-# For example, an atom 'a[5]' would become the integer 5.
 def parseValue(value):
-    if type(value) == bool:
-        return value
-    elif type(value) == int:
-        return value
-    elif type(value) == float:
-        return value
-    elif type(value) == str:
-        sep = '['
-        if sep in value:
-            typeName, bracket, data = value.partition('[')
-            data = data[:-1]
-            if typeName == 'a':
-                return int(data)
-            else: # can't convert this type to a number
-                return value
-        else: # probably a LAMBDA or other procedure
-            return value
-    
-    # this probably should not happen
-    return None
+    return value['value']
 
 # VentureUnit is an experimental harness for developing, debugging and profiling Venture programs.
 class VentureUnit:
-    RIPL = None
+    ripl = None
     parameters = {}
     assumes = []
     observes = []
@@ -71,16 +31,16 @@ class VentureUnit:
     # Override to constrain model on data.
     def makeObserves(self): pass
     
-    # Initializes parameters, generates the model, and prepares the RIPL.
-    def __init__(self, RIPL, parameters={}):
-        self.RIPL = RIPL
+    # Initializes parameters, generates the model, and prepares the ripl.
+    def __init__(self, ripl, parameters={}):
+        self.ripl = ripl
         
         # FIXME: Should the random seed be stored, or re-initialized?
         self.parameters = parameters.copy()
         if 'venture_random_seed' not in self.parameters:
-            self.parameters['venture_random_seed'] = self.RIPL.get_seed()
+            self.parameters['venture_random_seed'] = self.ripl.get_seed()
         else:
-            self.RIPL.set_seed(self.parameters['venture_random_seed'])
+            self.ripl.set_seed(self.parameters['venture_random_seed'])
         
         # FIXME: automatically assume parameters (and omit them from history)?
         self.assumes = []
@@ -94,37 +54,39 @@ class VentureUnit:
     # Prunes non-scalar values, unless prune=False.
     # Does not reset engine RNG.
     def loadModelWithPredicts(self, track=-1, prune=True):
-        self.RIPL.clear()
+        self.ripl.clear()
         
         assumeToDirective = {}
         for (symbol, expression) in self.assumes:
-            (directive, value) = self.RIPL.assume(symbol, parse(expression))
+            value = self.ripl.assume(symbol, expression, label=symbol)
             if (not prune) or record(value):
-                assumeToDirective[symbol] = directive
+                assumeToDirective[symbol] = symbol
         
         predictToDirective = {}
         for (index, (expression, literal)) in enumerate(self.observes):
-            (directive, value) = self.RIPL.predict(parse(expression))
+            #print("self.ripl.predict('%s', label='%d')" % (expression, index))
+            label = 'observe_%d' % index
+            value = self.ripl.predict(expression, label)
             if (not prune) or record(value):
-                predictToDirective[index] = directive
+                predictToDirective[index] = label
         
-        # choose a random subset to track, by default all are tracked
+        # choose a random subset to track; by default all are tracked
         if track >= 0:
             track = min(track, len(predictToDirective))
             # FIXME: need predictable behavior from RNG
-            random.seed(parameters['venture_random_seed'])
+            random.seed(self.parameters['venture_random_seed'])
             predictToDirective = dict(random.sample(predictToDirective.items(), track))
         
         return (assumeToDirective, predictToDirective)
     
-    # Updates recorded values after an iteration of the RIPL.
+    # Updates recorded values after an iteration of the ripl.
     def updateValues(self, keyedValues, keyToDirective):
         for (key, values) in keyedValues.items():
             if key not in keyToDirective: # we aren't interested in this series
                 del keyedValues[key]
                 continue
             
-            value = self.RIPL.report_value(keyToDirective[key])
+            value = self.ripl.report(keyToDirective[key])
             if len(values) > 0:
                 if type(value) == type(values[0]):
                     values.append(value)
@@ -157,7 +119,7 @@ class VentureUnit:
             
             (assumeToDirective, predictToDirective) = self.loadModelWithPredicts(track)
             
-            logscores.append(self.RIPL.logscore())
+            logscores.append(self.ripl.get_global_logscore())
             
             self.updateValues(assumedValues, assumeToDirective)
             self.updateValues(predictedValues, predictToDirective)
@@ -179,9 +141,12 @@ class VentureUnit:
     def sweep(self):
         iterations = 0
         
-        while iterations < self.RIPL.get_entropy_info()['unconstrained_random_choices']:
-            step = self.RIPL.get_entropy_info()['unconstrained_random_choices']
-            self.RIPL.infer(step)
+        #FIXME: use a profiler method here
+        get_entropy_info = self.ripl.sivm.core_sivm.engine.get_entropy_info
+        
+        while iterations < get_entropy_info()['unconstrained_random_choices']:
+            step = get_entropy_info()['unconstrained_random_choices']
+            self.ripl.infer(step)
             iterations += step
         
         return iterations
@@ -219,7 +184,7 @@ class VentureUnit:
                 
                 sweepTimes.append(end-start)
                 sweepIters.append(iterations)
-                logscores.append(self.RIPL.logscore())
+                logscores.append(self.ripl.get_global_logscore())
                 
                 self.updateValues(assumedValues, assumeToDirective)
                 self.updateValues(predictedValues, predictToDirective)
@@ -266,16 +231,16 @@ class VentureUnit:
             if verbose:
                 print "Starting run " + str(run)
             
-            self.RIPL.clear()
+            self.ripl.clear()
         
             assumeToDirective = {}
             for (symbol, expression) in self.assumes:
-                (directive, value) = self.RIPL.assume(symbol, parse(expression))
-                if record(value): assumeToDirective[symbol] = directive
+                value = self.ripl.assume(symbol, expression, symbol)
+                if record(value): assumeToDirective[symbol] = symbol
         
             for (index, (expression, literal)) in enumerate(self.observes):
                 datum = literal if data is None else data[index]
-                self.RIPL.observe(parse(expression), datum)
+                self.ripl.observe(expression, datum)
 
             sweepTimes = []
             sweepIters = []
@@ -296,7 +261,7 @@ class VentureUnit:
                 
                 sweepTimes.append(end-start)
                 sweepIters.append(iterations)
-                logscores.append(self.RIPL.logscore())
+                logscores.append(self.ripl.get_global_logscore())
                 
                 self.updateValues(assumedValues, assumeToDirective)
             
@@ -316,15 +281,15 @@ class VentureUnit:
         
         (assumeToDirective, predictToDirective) = self.loadModelWithPredicts(prune=False)
         
-        data = [self.RIPL.report_value(predictToDirective[index]) for index in range(len(self.observes))]
+        data = [self.ripl.report(predictToDirective[index]) for index in range(len(self.observes))]
         
         assumedValues = {}
         for (symbol, directive) in assumeToDirective.iteritems():
-            value = self.RIPL.report_value(directive)
+            value = self.ripl.report(directive)
             if record(value):
                 assumedValues[symbol] = value
         
-        logscore = self.RIPL.logscore()
+        logscore = self.ripl.get_global_logscore()
         
         history = self.runFromConditional(sweeps, data, runs, verbose)
         
@@ -491,9 +456,10 @@ def cartesianProduct(keyToValues):
 # Here the parameters can contain lists. For example, {'a':[0, 1], 'b':[2, 3]}.
 # Then histories will be computed for the parameter settings ('a', 'b') = (0, 1), (0, 2), (1, 2), (1, 3)
 # Runner should take a given parameter setting and produce a history.
-# For example, runner = lambda params : Model(RIPL, params).runConditionedFromPrior(sweeps, runs)
+# For example, runner = lambda params : Model(ripl, params).runConditionedFromPrior(sweeps, runs)
 # Returned is a dictionary mapping each parameter setting (as a namedtuple) to the history.
-def produceHistories(parameters, runner):
+# TODO: print stuff when verbose=True
+def produceHistories(parameters, runner, verbose=False):
     return {params : runner(params._asdict()) for params in cartesianProduct(parameters)}
 
 def addToDict(dictionary, key, value):
