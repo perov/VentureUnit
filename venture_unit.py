@@ -58,7 +58,12 @@ class VentureUnit:
         
         assumeToDirective = {}
         for (symbol, expression) in self.assumes:
-            value = self.ripl.assume(symbol, expression, label=symbol)
+            from venture.exception import VentureException
+            try:
+                value = self.ripl.assume(symbol, expression, label=symbol, type=True)
+            except VentureException as e:
+                print expression
+                raise e
             if (not prune) or record(value):
                 assumeToDirective[symbol] = symbol
         
@@ -66,7 +71,7 @@ class VentureUnit:
         for (index, (expression, literal)) in enumerate(self.observes):
             #print("self.ripl.predict('%s', label='%d')" % (expression, index))
             label = 'observe_%d' % index
-            value = self.ripl.predict(expression, label)
+            value = self.ripl.predict(expression, label=label, type=True)
             if (not prune) or record(value):
                 predictToDirective[index] = label
         
@@ -86,9 +91,9 @@ class VentureUnit:
                 del keyedValues[key]
                 continue
             
-            value = self.ripl.report(keyToDirective[key])
+            value = self.ripl.report(keyToDirective[key], type=True)
             if len(values) > 0:
-                if type(value) == type(values[0]):
+                if value['type'] == values[0]['type']:
                     values.append(value)
                 else: # directive has returned a different type; discard the series
                     del keyedValues[key]
@@ -96,7 +101,7 @@ class VentureUnit:
                 values.append(value)
             else: # directive has returned a non-scalar type; discard the series
                 del keyedValues[key]
-
+    
     # Gives a name to an observe directive.
     def nameObserve(self, index):
         return 'observe[' + str(index) + '] ' + self.observes[index][0]
@@ -153,7 +158,8 @@ class VentureUnit:
     
     # Runs inference on the joint distribution (observes turned into predicts).
     # A random subset of the predicts are tracked along with the assumed variables.
-    def runFromJoint(self, sweeps, track=5, runs=3, verbose=False):
+    # If profiling is enabled, information about random choices is recorded.
+    def runFromJoint(self, sweeps, track=5, runs=3, verbose=False, profile=False):
         history = History('run_from_joint', self.parameters)
         
         for run in range(runs):
@@ -162,12 +168,8 @@ class VentureUnit:
             
             (assumeToDirective, predictToDirective) = self.loadModelWithPredicts(track)
             
-            assumedValues = {}
-            for symbol in assumeToDirective:
-              assumedValues[symbol] = []
-            predictedValues = {}
-            for index in predictToDirective:
-              predictedValues[index] = []
+            assumedValues = {symbol : [] for symbol in assumeToDirective}
+            predictedValues = {index: [] for index in predictToDirective}
             
             sweepTimes = []
             sweepIters = []
@@ -178,9 +180,9 @@ class VentureUnit:
                     print "Running sweep " + str(sweep)
                 
                 # FIXME: use timeit module for better precision
-                start = time.clock()
+                start = time.time()
                 iterations = self.sweep()
-                end = time.clock()
+                end = time.time()
                 
                 sweepTimes.append(end-start)
                 sweepIters.append(iterations)
@@ -197,10 +199,12 @@ class VentureUnit:
                 history.addSeries(symbol, 'run ' + str(run), map(parseValue, values))
             
             for (index, values) in predictedValues.iteritems():
-                history.addSeries(self.nameObserve(index), 'run ' + str(run), map(parseValue, values))
+                history.addSeries(self.nameObserve(index), 'run %d' % run, map(parseValue, values))
+        
+        if profile:
+            history.profile = Profile(self.ripl)
         
         return history
-    
     
     # Computes the KL divergence on i.i.d. samples from the prior and inference on the joint.
     # Returns the sampled history, inferred history, and history of KL divergences.
@@ -224,7 +228,7 @@ class VentureUnit:
     
     # Runs inference on the model conditioned on observed data.
     # By default the data is as given in makeObserves(parameters).
-    def runFromConditional(self, sweeps, data=None, runs=3, verbose=False):        
+    def runFromConditional(self, sweeps, data=None, runs=3, verbose=False, profile=False):
         history = History('run_from_conditional', self.parameters)
         
         for run in range(runs):
@@ -235,13 +239,13 @@ class VentureUnit:
         
             assumeToDirective = {}
             for (symbol, expression) in self.assumes:
-                value = self.ripl.assume(symbol, expression, symbol)
+                value = self.ripl.assume(symbol, expression, symbol, type=True)
                 if record(value): assumeToDirective[symbol] = symbol
         
             for (index, (expression, literal)) in enumerate(self.observes):
                 datum = literal if data is None else data[index]
                 self.ripl.observe(expression, datum)
-
+            
             sweepTimes = []
             sweepIters = []
             logscores = []
@@ -271,27 +275,30 @@ class VentureUnit:
             
             for (symbol, values) in assumedValues.iteritems():
                 history.addSeries(symbol, 'run ' + str(run), map(parseValue, values))
+            
+            if profile:
+                history.profile = Profile(self.ripl)
         
         return history
     
     # Run inference conditioned on data generated from the prior.
-    def runConditionedFromPrior(self, sweeps, runs=3, verbose=False):
+    def runConditionedFromPrior(self, sweeps, runs=3, verbose=False, profile=False):
         if verbose:
             print 'Generating data from prior'
         
         (assumeToDirective, predictToDirective) = self.loadModelWithPredicts(prune=False)
         
-        data = [self.ripl.report(predictToDirective[index]) for index in range(len(self.observes))]
+        data = [self.ripl.report(predictToDirective[index], type=True) for index in range(len(self.observes))]
         
         assumedValues = {}
         for (symbol, directive) in assumeToDirective.iteritems():
-            value = self.ripl.report(directive)
+            value = self.ripl.report(directive, type=True)
             if record(value):
                 assumedValues[symbol] = value
         
         logscore = self.ripl.get_global_logscore()
         
-        history = self.runFromConditional(sweeps, data, runs, verbose)
+        history = self.runFromConditional(sweeps, data, runs, verbose, profile)
         
         history.addSeries('logscore', 'prior', [logscore]*sweeps, hist=False)
         for (symbol, value) in assumedValues.iteritems():
@@ -300,6 +307,57 @@ class VentureUnit:
         history.label = 'run_conditioned_from_prior'
         
         return history
+
+# Reads the profile data from the ripl.
+# Returns a map from (random choice) addresses to info objects.
+# The info contains the trials, successes, acceptance_rate, proposal_time, and source_location.
+class Profile:
+    def __init__(self, ripl):
+        random_choices = ripl.profiler_list_random_choices()
+        self.addressToInfo = {}
+        self.locationToInfo = {}
+        
+        for address in random_choices:
+            info = object()
+            info.address = address
+            
+            acceptance = self.ripl.profiler_get_acceptance_rate(address)
+            info.trials = acceptance[0]
+            info.successes = acceptance[1]
+            info.acceptance_rate = info.successes / info.trials
+            
+            info.proposal_time = self.ripl.profiler_get_proposal_time(address)
+            
+            info.source_location = self.ripl.profiler_address_to_source_code_location()
+            
+            self.addressToInfo[address] = info
+            
+            if info.proposal_time not in self.locationToAddress:
+                self.locationToAddress[info.proposal_time] = []
+            
+            self.locationToAddress[info.proposal_time].append(info)
+        
+        # aggregates multiple info objects into one
+        def aggregate(infos):
+            agg = object()
+            
+            for attr in ['trials', 'successes', 'proposal_time']:
+                setattr(agg, attr, sum([getattr(info, attr) for info in infos]))
+            
+            agg.acceptance_rate = agg.successes / agg.trials
+            
+            return agg
+        
+        self.locationToAggregate = dict([(location, aggregate(infos)) for (location, infos) in self.locationToInfo.items()])
+    
+    # The [5] longest
+    def hotspots(self, num=5):
+        hot = sorted(self.addressToInfo.values(), key=lambda info: info.proposal_time, reverse=True)
+        return hot[:maxnum]
+    
+    def coldspots(self, num=5):
+        cold = sorted(self.addressToInfo.values(), key=lambda info: info.acceptance_rate)
+        return cold[:num]
 
 from numpy import mean
 
