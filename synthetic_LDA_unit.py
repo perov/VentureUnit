@@ -24,17 +24,19 @@ class LDA(VentureUnit):
             for pos in range(N):
                 self.observe("(get_word %d %d)" % (doc, pos), 0)
 
-#parameters = {'topics' : 4, 'vocab' : 10, 'documents' : 8, 'words_per_document' : 12}
-#model = LDA(ripl, parameters)
+parameters = {'topics' : 4, 'vocab' : 10, 'documents' : 8, 'words_per_document' : 12}
+model = LDA(ripl, parameters)
 
 #history = model.runConditionedFromPrior(50, verbose=True)
 #history = model.runFromJoint(50, verbose=True)
 #history = model.sampleFromJoint(20, verbose=True)
 #history = model.computeJointKL(200, 200, verbose=True)[2]
-#history.plot(fmt='png')
+history = model.runFromConditional(50)
+history.plot(fmt='png')
 
+'''
 parameters = {'topics' : [4, 8], 'vocab' : 10, 'documents' : [8, 12], 'words_per_document' : [4*x for x in range(2, 10)]}
 runner = lambda params : LDA(ripl, params).runConditionedFromPrior(sweeps=20, runs=1)
 histories = produceHistories(parameters, runner)
 plotAsymptotics(parameters, histories, 'sweep_time', aggregate=True)
-
+'''
