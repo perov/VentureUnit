@@ -377,7 +377,7 @@ class History:
     
     # Returns the average over all series with the given name.
     def averageValue(self, seriesName):
-        return mean([(series.label, mean(series.values)) for series in self.nameToSeries[seriesName]])
+        return mean([mean(series.values) for series in self.nameToSeries[seriesName]])
     
     # default directory for plots, created from parameters
     def defaultDirectory(self):
@@ -545,7 +545,11 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
     
     # Pick a parameter for the x-axis.
     for (key, values) in parameters.items():
+        # don't use single parameter values
         if not hasattr(values, '__iter__'):
+            continue
+        # or non-numeric parameters
+        if type(values[0]) in {str}:
             continue
         
         others = parameters.copy()
