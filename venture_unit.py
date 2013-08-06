@@ -375,11 +375,9 @@ class History:
             self.nameToSeries[name] = []
         self.nameToSeries[name].append(Series(label, values, hist))
     
+    # Returns the average over all series with the given name.
     def averageValue(self, seriesName):
-        if seriesName not in self.nameToSeries:
-            return None
-        
-        return [(series.label, mean(series.values)) for series in self.nameToSeries[seriesName]]
+        return mean([(series.label, mean(series.values)) for series in self.nameToSeries[seriesName]])
     
     # default directory for plots, created from parameters
     def defaultDirectory(self):
@@ -505,10 +503,10 @@ def makeIterable(obj):
 
 def cartesianProduct(keyToValues):
     items = [(key, makeIterable(value)) for (key, value) in keyToValues.items()]
+    (keys, values) = zip(*items)
     
-    Key = namedtuple('Key', [key for (key, _) in items])
-    
-    return [Key._make(t) for t in itertools.product(*[values for (_, values) in items])]
+    Key = namedtuple('Key', keys)
+    return [Key._make(t) for t in itertools.product(*values)]
 
 # Produces histories for a set of parameters.
 # Here the parameters can contain lists. For example, {'a':[0, 1], 'b':[2, 3]}.
@@ -516,15 +514,21 @@ def cartesianProduct(keyToValues):
 # Runner should take a given parameter setting and produce a history.
 # For example, runner = lambda params : Model(ripl, params).runConditionedFromPrior(sweeps, runs)
 # Returned is a dictionary mapping each parameter setting (as a namedtuple) to the history.
-# TODO: print stuff when verbose=True
 def produceHistories(parameters, runner, verbose=False):
-    return {params : runner(params._asdict()) for params in cartesianProduct(parameters)}
+    def _runner(params):
+        if verbose:
+            print(params)
+        return runner(params._asdict())
+    
+    return {params : _runner(params) for params in cartesianProduct(parameters)}
 
+# Sets key to value and returns the updated dictionary.
 def addToDict(dictionary, key, value):
     dictionary[key] = value
     return dictionary
 
 # Produces plots for a a given variable over a set of runs.
+# Variable parameters are the x-axis, 'seriesName' is the y-axis.
 # If aggregate=True, multiple plots that differ in only one parameter are overlayed.
 def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None, verbose=False, aggregate=False):
     if directory is None:
@@ -533,9 +537,13 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
     if not os.path.exists(directory):
         os.mkdir(directory)
     
+    # Hashable tuple with named entries (like a dict).
     Key = namedtuple('Key', parameters.keys())
-    paramsToValue = {params : mean([value for (_, value) in history.averageValue(seriesName)]) for (params, history) in histories.items()}
     
+    # Map from parameters to the average value of the seriesName for those parameters.
+    paramsToValue = {params : history.averageValue(seriesName) for (params, history) in histories.items()}
+    
+    # Pick a parameter for the x-axis.
     for (key, values) in parameters.items():
         if not hasattr(values, '__iter__'):
             continue
@@ -544,12 +552,14 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
         del others[key]
         
         if aggregate:
+            # Pick another parameter to aggregate over.
             for (other, otherValues) in others.items():
                 otherValues = makeIterable(otherValues)
                 
                 rest = others.copy()
                 del rest[other]
                 
+                # Loop over all possible combinations of the remaining parameters.
                 for params in cartesianProduct(rest):
                     fig = plt.figure()
                     plt.clf()
@@ -560,6 +570,7 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
                     
                     colors = cm.rainbow(np.linspace(0, 1, len(otherValues)))
                     
+                    # For each setting of the aggregate parameter, plot the values with respect to the x-axis parameter.
                     for (otherValue, c) in zip(otherValues, colors):
                         p = addToDict(params._asdict(), other, otherValue)
                         plt.scatter(values, [paramsToValue[Key(**addToDict(p, key, value))] for value in values], label=other+'='+str(otherValue), color=c)
