@@ -220,7 +220,7 @@ class VentureUnit:
             for inferredSeries in seriesList:
                 sampledSeries = sampledHistory.nameToSeries[name][0]
                 
-                klValues = [computeKL(sampledSeries.values[:index+1], inferredSeries.values) for index in range(sweeps)]
+                klValues = [computeKL(sampledSeries.values, inferredSeries.values[:index+1]) for index in range(sweeps)]
                 
                 klHistory.addSeries('KL_' + name, inferredSeries.label, klValues, hist=False)
         
@@ -512,7 +512,7 @@ def cartesianProduct(keyToValues):
 # Here the parameters can contain lists. For example, {'a':[0, 1], 'b':[2, 3]}.
 # Then histories will be computed for the parameter settings ('a', 'b') = (0, 1), (0, 2), (1, 2), (1, 3)
 # Runner should take a given parameter setting and produce a history.
-# For example, runner = lambda params : Model(ripl, params).runConditionedFromPrior(sweeps, runs)
+# For example, runner = lambda params : Model(ripl, params).runConditionedFromPrior(sweeps, runs, track=0)
 # Returned is a dictionary mapping each parameter setting (as a namedtuple) to the history.
 def produceHistories(parameters, runner, verbose=False):
     def _runner(params):
@@ -573,7 +573,8 @@ def plotAsymptotics(parameters, histories, seriesName, fmt='pdf', directory=None
                     # For each setting of the aggregate parameter, plot the values with respect to the x-axis parameter.
                     for (otherValue, c) in zip(otherValues, colors):
                         p = addToDict(params._asdict(), other, otherValue)
-                        plt.scatter(values, [paramsToValue[Key(**addToDict(p, key, value))] for value in values], label=other+'='+str(otherValue), color=c)
+                        plt.scatter(values, [paramsToValue[Key(**addToDict(p, key, value))] for value in values],
+                            label=other+'='+str(otherValue), color=c)
                     
                     plt.legend()
                     
