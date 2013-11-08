@@ -7,22 +7,22 @@ class LDA(VentureUnit):
     def makeAssumes(self):
         self.assume("topics", self.parameters['topics'])
         self.assume("vocab", self.parameters['vocab'])
-        
         self.assume("alpha_document_topic", "(gamma 1.0 1.0)")
         self.assume("alpha_topic_word", "(gamma 1.0 1.0)")
-        
-        self.assume("get_document_topic_sampler", "(mem (lambda (doc) (symmetric_dirichlet_multinomial_make alpha_document_topic topics)))")
-        self.assume("get_topic_word_sampler", "(mem (lambda (topic) (symmetric_dirichlet_multinomial_make alpha_topic_word vocab)))")
-        
+        self.assume("get_document_topic_sampler", "(mem (lambda (doc) (make_sym_dir_mult alpha_document_topic topics)))")
+        self.assume("get_topic_word_sampler", "(mem (lambda (topic) (make_sym_dir_mult alpha_topic_word vocab)))")
         self.assume("get_word", "(mem (lambda (doc pos) ((get_topic_word_sampler ((get_document_topic_sampler doc))))))")
-        
+        return
+
+
     def makeObserves(self):
         D = self.parameters['documents']
         N = self.parameters['words_per_document']
-        
         for doc in range(D):
             for pos in range(N):
-                self.observe("(get_word %d %d)" % (doc, pos), 0)
+                self.observe("(get_word %d %d)" % (doc, pos), "atom<%d>" % 0)
+        return
+
 
 parameters = {'topics' : 4, 'vocab' : 10, 'documents' : 8, 'words_per_document' : 12}
 model = LDA(ripl, parameters)
